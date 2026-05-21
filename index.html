@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台北租屋 & 捷運出入口 & 超商地圖</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', '微軟正黑體', sans-serif;
+            background: #f5f5f5;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        #map {
+            flex: 1;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar {
+            width: 350px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .sidebar-header h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .sidebar-header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .rental-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .rental-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+            border-left: 4px solid #1f4068;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .rental-item:hover {
+            background: #f0f0f0;
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .rental-item.active {
+            background: #e8eaf6;
+            border-left-color: #e43f5a;
+        }
+
+        .rental-title {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        .rental-info {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .rental-price {
+            font-size: 16px;
+            font-weight: bold;
+            color: #e74c3c;
+            margin-bottom: 8px;
+        }
+
+        /* 分數標籤樣式 */
+        .score-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            color: white;
+            font-size: 11px;
+            margin-left: 5px;
+        }
+
+        .score-A {
+            background-color: #e74c3c;
+        }
+
+        .score-B {
+            background-color: #f39c12;
+        }
+
+        .score-C {
+            background-color: #2ecc71;
+        }
+
+        .score-D {
+            background-color: #9b59b6;
+        }
+
+        .rental-link {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #1f4068;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 12px;
+            transition: background 0.3s ease;
+        }
+
+        .rental-link:hover {
+            background: #162447;
+        }
+
+        .stats {
+            padding: 10px 20px;
+            background: #f0f0f0;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        /* Popup 氣球樣式設定 */
+        .leaflet-popup-content {
+            font-family: 'Microsoft JhengHei', '微軟正黑體', sans-serif !important;
+            font-size: 13px !important;
+        }
+
+        .popup-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .popup-info {
+            margin: 5px 0;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .popup-price {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 14px;
+            margin: 8px 0;
+        }
+
+        .popup-button {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 6px 12px;
+            background: #1f4068;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .popup-button:hover {
+            background: #162447;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+        }
+
+        .error {
+            padding: 20px;
+            color: #e74c3c;
+            background: #fff5f5;
+            border-radius: 4px;
+            margin: 10px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div id="map"></div>
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>🏠 台北租屋 & 捷運 & 超商地圖</h1>
+                <p>載入多資料源中...</p>
+            </div>
+            <div class="rental-list" id="rentalList">
+                <div class="loading">📍 正在讀取三檔案資料...</div>
+            </div>
+            <div class="stats">
+                <div>總共 <span id="totalCount">0</span> 筆租屋</div>
+                <div>租金範圍: NT$ <span id="minPrice">0</span> - <span id="maxPrice">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+    <script>
+        // 初始化地圖
+        const map = L.map('map').setView([25.033, 121.520], 13);
+
+        // 添加地圖層
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // 1. 定義租屋四大機能自訂圖示
+        const icons = {
+            'A': L.icon({ iconUrl: 'red_icon.png', iconSize: [38, 62], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
+            'B': L.icon({ iconUrl: 'oringe_icon.png', iconSize: [38, 62], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
+            'C': L.icon({ iconUrl: 'green_icon.png', iconSize: [38, 62], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
+            'D': L.icon({ iconUrl: 'purple_icon.png', iconSize: [38, 62], iconAnchor: [12, 41], popupAnchor: [1, -34] })
+        };
+
+        // 捷運自訂圖示
+        const mrtLogoIcon = L.icon({
+            iconUrl: 'Taipei_Metro_Logo.png',
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+            popupAnchor: [0, -18]
+        });
+
+        // 新增：超商自訂圖示對照表
+        const storeIcons = {
+            '全聯實業股份有限公司': L.icon({
+                iconUrl: 'Free bear.png',
+                iconSize: [24, 24],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
+            }),
+            '全家便利商店股份有限公司': L.icon({
+                iconUrl: 'Family Mart.png',
+                iconSize: [24, 24],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
+            }),
+            '統一超商股份有限公司': L.icon({
+                iconUrl: 'Seven.png',
+                iconSize: [24, 24],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
+            })
+        };
+
+        // 預設防呆圖示
+        const defaultIcon = L.icon({
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+            iconSize: [38, 62],
+            iconAnchor: [19, 62],
+            popupAnchor: [0, -34]
+        });
+
+        let rentals = [];
+        let stations = [];
+        let stores = []; // 新增：用來存放超商資料的陣列
+        let markers = {};
+
+        // 同時讀取三個 JSON 檔案
+        function loadAllData() {
+            const fetchRentals = fetch('MRT_convenience_mix_score_full.json').then(res => {
+                if (!res.ok) throw new Error('無法讀取租屋檔案 (MRT_convenience_mix_score_full.json)');
+                return res.json();
+            });
+
+            const fetchStations = fetch('dict_mapping_TP_json_data.json').then(res => {
+                if (!res.ok) throw new Error('無法讀取捷運對照檔 (dict_mapping_TP_json_data.json)');
+                return res.json();
+            });
+
+            // 新增：讀取超商檔案
+            const fetchStores = fetch('geocode_conven_0516_arcgis.json').then(res => {
+                if (!res.ok) throw new Error('無法讀取超商檔案 (geocode_conven_0516_arcgis.json)');
+                return res.json();
+            });
+
+            Promise.all([fetchRentals, fetchStations, fetchStores])
+                .then(([rentalData, stationData, storeData]) => {
+                    rentals = rentalData;
+                    stations = stationData;
+                    stores = storeData;
+
+                    // 偵錯日誌
+                    console.log('成功載入租屋資料：', rentals.length, '筆');
+                    console.log('成功載入捷運原始資料：', stationData);
+                    console.log('成功載入超商原始資料：', stores.length, '筆');
+
+                    document.querySelector('.sidebar-header p').textContent = '地圖已標示房源機能、北捷出入口與生活超商';
+
+                    renderStations();
+                    renderStores(); // 新增：繪製超商標記
+                    renderRentals();
+                    updateStats();
+                })
+                .catch(error => {
+                    console.error('資料載入失敗原因:', error);
+                    const listContainer = document.getElementById('rentalList');
+                    listContainer.innerHTML = `
+                        <div class="error">
+                            ⚠️ <strong>資料載入失敗：</strong> ${error.message}<br><br>
+                            <strong>請確認：</strong>三個 JSON 檔案名稱是否正確，並與此 HTML 放在同一個資料夾。
+                        </div>
+                    `;
+                });
+        }
+
+        // 繪製捷運站出入口
+        function renderStations() {
+            let stationsEntries = [];
+
+            if (stations && typeof stations === 'object' && !Array.isArray(stations)) {
+                if (stations.data && typeof stations.data === 'object' && !Array.isArray(stations.data)) {
+                    stationsEntries = Object.entries(stations.data);
+                } else if (stations.result && typeof stations.result === 'object' && !Array.isArray(stations.result)) {
+                    stationsEntries = Object.entries(stations.result);
+                } else {
+                    stationsEntries = Object.entries(stations);
+                }
+            }
+
+            if (stationsEntries.length === 0) {
+                console.warn('無法解析出有效的捷運站字典結構。');
+                return;
+            }
+
+            let markerCount = 0;
+
+            stationsEntries.forEach(([stationTitle, coordArray]) => {
+                if (Array.isArray(coordArray) && coordArray.length >= 2) {
+                    const lng = parseFloat(coordArray[0]);
+                    const lat = parseFloat(coordArray[1]);
+
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        L.marker([lat, lng], {
+                            title: stationTitle,
+                            icon: mrtLogoIcon,
+                            zIndexOffset: 2000 // 設在較上層
+                        }).addTo(map).bindPopup(`
+                            <div class="popup-title">🚇 ${stationTitle}</div>
+                            <div class="popup-info">台北捷運車站出入口</div>
+                            <div class="popup-info" style="color: #888; font-size: 11px;">座標: ${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+                        `);
+                        markerCount++;
+                    }
+                }
+            });
+            console.log(`地圖成功繪製了 ${markerCount} 個捷運出入口標記！`);
+        }
+
+        // 新增：繪製超商標記的 function
+        function renderStores() {
+            if (!Array.isArray(stores)) {
+                console.warn('超商資料並非陣列結構，無法繪製。');
+                return;
+            }
+
+            let storeCount = 0;
+
+            stores.forEach((store) => {
+                const lat = parseFloat(store.latitude);
+                const lng = parseFloat(store.longitude);
+                const companyName = store['公司名稱'];
+                const storeName = store['分店名稱'] || store['場所名稱'] || '超商門市';
+                const address = store['地址'] || store['address'] || '未提供地址';
+
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    // 根據公司名稱指派圖示，如果都不符合就用 defaultIcon
+                    const customIcon = storeIcons[companyName] || defaultIcon;
+
+                    // 縮減品牌名稱做為 Popup 標題前綴
+                    let brandEmoji = '🏪';
+                    if (companyName.includes('全聯')) brandEmoji = '🛒 [全聯]';
+                    if (companyName.includes('全家')) brandEmoji = '🏪 [全家]';
+                    if (companyName.includes('統一')) brandEmoji = '🏪 [7-11]';
+
+                    L.marker([lat, lng], {
+                        title: storeName,
+                        icon: customIcon,
+                        zIndexOffset: 1000 // 超商設在中圖層
+                    }).addTo(map).bindPopup(`
+                        <div class="popup-title">${brandEmoji} ${storeName}</div>
+                        <div class="popup-info">🏢 公司: ${companyName}</div>
+                        <div class="popup-info">📍 地址: ${address}</div>
+                    `);
+
+                    storeCount++;
+                }
+            });
+
+            console.log(`【超商解鎖】地圖成功繪製了 ${storeCount} 個超商門市標記！`);
+        }
+
+        // 繪製租屋點並渲染側邊欄
+        function renderRentals() {
+            const listContainer = document.getElementById('rentalList');
+            listContainer.innerHTML = '';
+
+            rentals.forEach((rental, index) => {
+                const {
+                    id, title, address, price, latitude, longitude, area,
+                    distance_m, distance_t, walkability_level, MRTstation
+                } = rental;
+
+                const customIcon = icons[walkability_level] || defaultIcon;
+
+                const marker = L.marker([latitude, longitude], {
+                    title: title,
+                    icon: customIcon,
+                    zIndexOffset: 3000 // 租屋房源維持最上層
+                }).addTo(map);
+
+                const popupContent = `
+                    <div class="popup-title">
+                        ${title}
+                        <span class="score-badge score-${walkability_level || 'D'}">機能 ${walkability_level || 'N/A'}</span>
+                    </div>
+                    <div class="popup-info">📍 ${address}</div>
+                    <div class="popup-info">📐 面積: ${area || 'N/A'} 坪</div>
+                    <div class="popup-info">🚇 最近捷運站: ${MRTstation || '未提供'}</div>
+                    <div class="popup-info">🚶 捷運站距離: ${distance_m ? distance_m + ' 公尺' : 'N/A'} (步行約 ${distance_t || '0'} 分鐘)</div>
+                    <div class="popup-price">💰 NT$ ${typeof price === 'number' ? price.toLocaleString('zh-TW') : price}</div>
+                    <a href="https://rent.591.com.tw/rent-detail-${id}.html" target="_blank" class="popup-button">
+                        查看完整內容 →
+                    </a>
+                `;
+                marker.bindPopup(popupContent);
+
+                markers[index] = marker;
+
+                const listItem = document.createElement('div');
+                listItem.className = 'rental-item';
+                listItem.innerHTML = `
+                    <div class="rental-title">
+                        ${title}
+                        <span class="score-badge score-${walkability_level || 'D'}">${walkability_level || 'N/A'} 級</span>
+                    </div>
+                    <div class="rental-info">📍 ${address}</div>
+                    <div class="rental-info">📐 面積: ${area || 'N/A'} 坪</div>
+                    <div class="rental-info">🚇 鄰近捷運: ${MRTstation || 'N/A'} 站 (${distance_m ? distance_m + 'm' : 'N/A'})</div>
+                    <div class="rental-price">💰 NT$ ${typeof price === 'number' ? price.toLocaleString('zh-TW') : price}</div>
+                    <a href="https://rent.591.com.tw/rent-detail-${id}.html" target="_blank" class="rental-link">
+                        查看詳情 →
+                    </a>
+                `;
+
+                listItem.addEventListener('click', () => {
+                    map.setView([latitude, longitude], 16);
+                    marker.openPopup();
+                    document.querySelectorAll('.rental-item').forEach(el => el.classList.remove('active'));
+                    listItem.classList.add('active');
+                });
+
+                marker.on('click', () => {
+                    document.querySelectorAll('.rental-item').forEach((el, i) => {
+                        el.classList.remove('active');
+                        if (i === index) {
+                            el.classList.add('active');
+                            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                    });
+                });
+
+                listContainer.appendChild(listItem);
+            });
+        }
+
+        function updateStats() {
+            if (rentals.length === 0) return;
+            const prices = rentals.map(r => {
+                const cleaned = String(r.price).replace(/[^0-9]/g, '');
+                return parseInt(cleaned) || 0;
+            }).filter(p => p > 0);
+
+            if (prices.length === 0) return;
+
+            const minPrice = Math.min(...prices);
+            const maxPrice = Math.max(...prices);
+
+            document.getElementById('totalCount').textContent = rentals.length;
+            document.getElementById('minPrice').textContent = minPrice.toLocaleString('zh-TW');
+            document.getElementById('maxPrice').textContent = maxPrice.toLocaleString('zh-TW');
+        }
+
+        document.addEventListener('DOMContentLoaded', loadAllData);
+    </script>
+</body>
+
+</html>
