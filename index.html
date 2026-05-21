@@ -414,7 +414,7 @@
                 const lat = parseFloat(store.latitude);
                 const lng = parseFloat(store.longitude);
                 const companyName = store['公司名稱'];
-                const storeName = store['分店名稱'] || store['場所名稱'] || '超商門市';
+                const storeName = store['分店名稱'] || store['分公司名稱'] || '超商門市';
                 const address = store['地址'] || store['address'] || '未提供地址';
 
                 if (!isNaN(lat) && !isNaN(lng)) {
